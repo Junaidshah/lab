@@ -1,0 +1,129 @@
+# Update and install dependent packages.
+- name: install nagios' dependent packages
+  sudo: true
+  apt: pkg={{ item }} state=present force=true update_cache=yes
+  with_items:
+    - apache2
+    - libapache2-mod-php
+    - build-essential
+    - libgd2-xpm-dev
+    - libssl-dev
+    - sendmail-bin
+    - sendmail
+    - heirloom-mailx
+    - wget
+    - curl
+    - daemon
+    - apt-file
+    - libnet-snmp-perl
+    - libpq-dev
+    - libsensors4
+    - libsnmp-base
+    - libtalloc2
+    - libtdb1
+    - libwbclient0
+    - samba-common
+    - samba-common-bin
+    - smbclient
+    - snmp
+    - whois
+    - checkinstall
+    - python-passlib
+    - libwww-perl
+    - libcrypt-ssleay-perl
+
+- name: install legacy packages
+  sudo: true
+  apt: pkg={{ item }} state=present force=true update_cache=yes
+  with_items: nagios_legacy_packages
+  when: legacy | default(false)
+
+# Create nagios users and groups.
+- name: create nagios group
+  sudo: true
+  group: >
+    gid=3000
+    name=nagios
+
+- name: create nagcmd group
+  sudo: true
+  group: >
+    gid=3001
+    name=nagcmd
+
+- name: create nagios user
+  sudo: true
+  user: >
+    uid=3000
+    group=nagios
+    groups=nagcmd
+    name=nagios
+    home=/usr/local/nagios
+    comment="Nagios Admin"
+
+- name: add user www-data to nagcmd group
+  sudo: true
+  user: >
+    groups=nagcmd
+    name=www-data
+
+# build and install nagios.
+- tasks:
+  include: build-nagios.yml
+
+# Build and install nagios check plugins.
+- tasks:
+  include: build-plugins.yml
+
+# Build and install nagios remote checks.
+- tasks:
+  include: build-nrpe.yml
+
+# Setup apache.
+- tasks:
+  include: apache.yml
+
+- name: disable flap detection
+  sudo: true
+  lineinfile: >
+    dest=/usr/local/nagios/etc/nagios.cfg
+    line="enable_flap_detection=0"
+    regexp="^enable_flap_detection.*$"
+
+- name: overwrite contacts.cfg
+  sudo: true
+  template: >
+    src=contacts.cfg.j2
+    dest=/usr/local/nagios/etc/objects/contacts.cfg
+    owner=nagios
+    group=nagios
+    mode=640
+
+- name: install nagios upstart script
+  sudo: true
+  copy: >
+    src=nagios.conf
+    dest=/etc/init/nagios.conf
+    owner=nagios
+    group=nagios
+    mode=640
+
+- name: Setup nagios startup script
+  sudo: true
+  template: >
+    src=nagios.service.j2
+    dest=/etc/systemd/system/nagios.service
+    owner=root
+    group=root
+    mode=640
+
+- name: enable service nagios.
+  sudo: true
+  systemd:
+    name: nagios
+    enabled: yes
+
+- name: restart nagios
+  sudo: true
+  service: name=nagios state=restarted
+  notify: restart apache

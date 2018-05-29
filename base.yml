@@ -1,0 +1,44 @@
+---
+- hosts: all
+  become: true
+  become_user: root
+  become_method: sudo
+
+  pre_tasks:
+  - name: Update APT package cache
+    command: apt-get update
+
+  - name: Install python-apt  (Required by ANSIBLE)
+    command: apt-get -y install python-apt
+
+  - name: Install common programs
+    apt: package={{ item }} state=installed update_cache=yes cache_valid_time=3600
+    with_items:
+      - bash-completion
+      - postfix
+      - mailutils
+      - curl
+      - git-core
+      - openssl
+      - pkg-config
+      - vim
+      - linux-headers-generic
+      - build-essential
+      - dkms
+      - mcrypt
+      - python-dev
+      - apg
+
+  - name: Add Vagrant user to www-data group
+    user:
+      name: ubuntu
+      groups: www-data
+      append: yes
+
+  roles:
+  - apache
+  - mysql
+  - php
+  - wp-cli
+  - wordpress
+  - nagios
